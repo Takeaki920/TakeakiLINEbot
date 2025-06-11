@@ -1,31 +1,24 @@
+from sentence_transformers import SentenceTransformer
 import faiss
 import pickle
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
-# モデルのロード（軽量で高速な文書ベクトルモデル）
+# 軽量モデルを使用（すでに生成済みのベクトルと互換性がある場合）
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# FAISSインデックスと対応文書の読み込み（app.pyと同じ階層に置く）
-index = faiss.read_index("index.faiss")
-with open("index.pkl", "rb") as f:
-    documents = pickle.load(f)
+# インデックスとメタデータを読み込み
+faiss_index = faiss.read_index("faiss_index.index")
+with open("faiss_metadata.pkl", "rb") as f:
+    metadata = pickle.load(f)
 
-def search_similar_documents(query, top_k=3):
-    """ユーザーのクエリに似た文書を上位から取得"""
-    embedding = model.encode([query])
-    distances, indices = index.search(np.array(embedding).reshape(1, -1), top_k)
+def search_similar_documents(query, top_k=3, max_chars=1000):
+    query_vec = model.encode([query])
+    D, I = faiss_index.search(np.array(query_vec).astype("float32"), top_k)
+    
+    docs = []
+    for idx in I[0]:
+        if idx < len(metadata):
+            docs.append(metadata[idx])
 
-    # 🔍 ログ出力（Renderでも確認可能）
-    print("🔍 クエリ:", query)
-    print("🔍 検索インデックス:", indices)
-    print("🔍 類似スコア:", distances)
-
-    results = [documents[i] for i in indices[0] if i < len(documents)]
-
-    if not results:
-        print("⚠ 検索結果なし（results 空）")
-        return "（参考文献が見つかりませんでした）"
-
-    print("✅ 取得文書:\n", "\n---\n".join(results))
-    return "\n---\n".join(results)
+    combined = "\n\n".join(docs)
+    return combined[:max_chars] 
