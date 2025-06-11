@@ -4,9 +4,11 @@ import os
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from vector_search import search_similar_documents  # 書籍検索モジュールを読み込む
 
 app = Flask(__name__)
 
+# 環境変数からAPIキーなどを読み込み
 openai.api_key = os.getenv("OPENAI_API_KEY")
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
@@ -25,13 +27,22 @@ def callback():
 def handle_message(event):
     user_message = event.message.text
 
-    prompt = f"""あなたは「AIたけあき」という人格AIです。
-丁寧で親しみやすく、分かりやすく説明し、和の心と楽しさを大事にしています。
-ユーザーのメッセージに、あなたらしく返信してください。
+    # 書籍ベースの類似文書を検索（FAISS）
+    relevant_docs = search_similar_documents(user_message)
 
-ユーザー: {user_message}
-AIたけあき:"""
+    # GPTへのプロンプトを構築（人格＋参考文献）
+    prompt = f"""あなたは『明るい未来は和の心から』などの著者である晴田武陽のように話します。
+和の心、楽しさ、思いやりを大切にし、誰にでもわかりやすく丁寧に応答します。
+以下の参考文献に基づいて、質問に答えてください。
 
+参考文献:
+{relevant_docs}
+
+質問:
+{user_message}
+"""
+
+    # GPTで応答を生成
     response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
@@ -46,4 +57,3 @@ AIたけあき:"""
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
