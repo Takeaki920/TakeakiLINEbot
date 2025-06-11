@@ -6,8 +6,7 @@ import os # ファイルパスを扱うためにosモジュールを追加
 
 # --- モデルとインデックス、メタデータのロード ---
 
-# 軽量な多言語対応モデルを使用
-model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
 # FAISSインデックスとメタデータのファイルパスを設定
 # スクリーンショットのファイル名に合わせて修正
