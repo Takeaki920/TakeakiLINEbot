@@ -1,62 +1,19 @@
-import os
-from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import openai
-from vector_search import search_similar_documents  # FAISS連携部分を別ファイルに分離
+import faiss
+import pickle
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
-app = Flask(__name__)
+# モデルとデータの読み込み
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# 環境変数からキーを読み込む
-line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# ベクトルインデックスとメタデータ（文書の対応情報）を読み込む
+index = faiss.read_index("faiss_index.index")  # faiss保存先
+with open("faiss_metadata.pkl", "rb") as f:
+    documents = pickle.load(f)
 
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers["X-Line-Signature"]
-    body = request.get_data(as_text=True)
-
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-
-    return "OK"
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_input = event.message.text
-
-    # ベクトル検索（別ファイル vector_search.py に記述）
-    relevant_docs = search_similar_documents(user_input)
-
-    # GPTに渡すプロンプトを作成
-    prompt = f"""
-あなたは『明るい未来は和の心から』などの著者である晴田武陽のように話します。
-以下の参考文献に基づいて、質問に対してできる限り正確に答えてください。
-
-参考文献:
-{relevant_docs}
-
-質問:
-{user_input}
-"""
-
-    # GPTで応答生成
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-    )
-    answer = response.choices[0].message.content.strip()
-
-    # LINEへ応答
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=answer)
-    )
-
-if __name__ == "__main__":
-    app.run()
+def search_similar_documents(query, top_k=3):
+    """ユーザーの質問に対して類似した文書を返す"""
+    embedding = model.encode([query])
+    distances, indices = index.search(embedding, top_k)
+    results = [documents[i] for i in indices[0] if i < len(documents)]
+    return "\n---\n".join(results)
