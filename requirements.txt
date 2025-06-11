@@ -1,5 +1,6 @@
 Flask
-openai==0.28.1  # 特定のバージョンに固定
+openai==0.28.1
 line-bot-sdk
 faiss-cpu
 langchain
+sentence-transformers
